@@ -4,6 +4,17 @@ variable {Sig : Adt → Type}
 
 abbrev PolyEnv (n : Nat) := Fin n → Type
 
+class Backend (P : Type) where
+  Val   : Base → Type
+  const : {b : Base} → b.interp → Val b
+  add   : Val .int → Val .int → Val .int
+  eq    : Val .int → Val .int → Val .bool
+  cond  : Val .bool → P → P → P
+  unit : P
+  op : P → P → P
+
+variable (P : Type) [Backend P]
+
 def Poly.interp (env : PolyEnv n) (p : Poly n) : Type :=
   match p with
   | .base b => b.interp
@@ -12,14 +23,14 @@ def Poly.interp (env : PolyEnv n) (p : Poly n) : Type :=
   | .prod a b => a.interp env × b.interp env
 
 def Poly.interp1 {n : Nat} (env : Fin n → Type 1) : Poly n → Type 1
-  | .base b => ULift b.interp
+  | .base b => ULift (Backend.Val P b)
   | .var i => env i
   | .sum a b => a.interp1 env ⊕ b.interp1 env
   | .prod a b => a.interp1 env × b.interp1 env
 
 def Adt.layer : Adt → Type 1 → Type 1
-| .plain p, _ => p.interp1 Fin.elim0
-| .mu body, A => body.interp1 (fun _ => A)
+| .plain p, _ => p.interp1 P Fin.elim0
+| .mu body, A => body.interp1 P (fun _ => A)
 
 inductive MuVal (body : Poly 1) : Poly 1 → Type where
 | base {b : Base} (x : b.interp) : MuVal body (.base b)
@@ -37,15 +48,9 @@ def intList : Adt := .mu (.sum (.base .unit) (.prod (.base .int) (.var 0)))
 def ex : intList.interp :=
   .inr (.pair (.base (7 : Int)) (.roll (.inr (.pair (.base (9 : Int)) (.roll (.inl (.base ())))))))
 
-class Backend (P : Type) where
-  unit : P
-  op : P → P → P
-
-variable (P : Type) [Backend P]
-
 structure Dict (T : Adt) (A : Type) : Type 1 where
-  put   : T.layer (ULift A) → A → P          -- build one layer at a destination
-  open_ : (T.layer (ULift A) → P) → A → P    -- case-split one layer
+  put   : T.layer P (ULift A) → A → P          -- build one layer at a destination
+  open_ : (T.layer P (ULift A) → P) → A → P    -- case-split one layer
   fresh : (A → P) → P                -- allocate a destination
 
 structure SemLayout (T : Adt) : Type 1 where
@@ -69,7 +74,7 @@ def LayoutRef.interp {Δ} {T} (lenv : LEnv P Δ) : LayoutRef Sig Δ T → SemLay
 abbrev Comp (B : Type 1) : Type 1 := (B → ULift.{1} P) → ULift.{1} P
 
 def Ty.interp {Δ : LCtx} : (Ty Sig Δ) → LEnv P Δ → Type 1
-| .base b, _ => ULift b.interp
+| .base b, _ => ULift (Backend.Val P b)
 | .atL _ l, lenv => ULift (l.interp P sigSem lenv).Rep
 | .ref _ l, lenv => ULift (l.interp P sigSem lenv).Rep
 | .sum a b, lenv => a.interp lenv ⊕ b.interp lenv
@@ -83,7 +88,6 @@ def LSubst.interp (σ : LSubst Sig Δ Δ') (lenv' : LEnv P Δ') : LEnv P Δ :=
 def LRen.interp {Δ Δ'} (ρ : LRen Δ Δ') (lenv' : LEnv P Δ') : LEnv P Δ :=
   fun l => lenv' (ρ l)
 
-omit [Backend P] in
 /-- The meaning of a layout reference stays the same when weakened -/
 theorem LayoutRef.interp_weaken {Δ : LCtx} {T T' : Adt} (η : LEnv P Δ) (L' : SemLayout P T')
     (L : LayoutRef Sig Δ T) :
@@ -91,7 +95,6 @@ theorem LayoutRef.interp_weaken {Δ : LCtx} {T T' : Adt} (η : LEnv P Δ) (L' : 
       = L.interp P sigSem η := by
   cases L <;> rfl
 
-omit [Backend P] in
 theorem LSubst.interp_lift (σ : LSubst Sig Δ Δ') (lenv' : LEnv P Δ') (L : SemLayout P T)
     {T'} (l : LRef (Δ.extend T) T') :
     LSubst.interp P sigSem (σ.lift) (lenv'.extend P L) l = LEnv.extend P (LSubst.interp P sigSem σ lenv') L l := by
@@ -99,7 +102,6 @@ theorem LSubst.interp_lift (σ : LSubst Sig Δ Δ') (lenv' : LEnv P Δ') (L : Se
   | here => rfl
   | there l => exact LayoutRef.interp_weaken P sigSem lenv' L (σ l)
 
-omit [Backend P] in
 /-- Pointwise equal environments give equal interpretations -/
 theorem Ty.interp_congr {Δ : LCtx} {η₁ η₂ : LEnv P Δ}
     (h : ∀ {T : Adt} (l : LRef Δ T), η₁ l = η₂ l) (a : Ty Sig Δ) :
@@ -124,7 +126,6 @@ theorem Ty.interp_congr {Δ : LCtx} {η₁ η₂ : LEnv P Δ}
               | here => rfl
               | there l => exact h l))
 
-omit [Backend P] in
 theorem Ty.interp_subst (σ : LSubst Sig Δ Δ') (lenv' : LEnv P Δ') (a : Ty Sig Δ) :
     (a.subst σ).interp P sigSem lenv' = a.interp P sigSem (σ.interp P sigSem lenv') := by
   induction a generalizing Δ' with
@@ -141,29 +142,26 @@ theorem Ty.interp_subst (σ : LSubst Sig Δ Δ') (lenv' : LEnv P Δ') (a : Ty Si
           rw [← Ty.interp_congr P sigSem (LSubst.interp_lift P sigSem σ lenv' L) body]
         )
 
-omit [Backend P] in
 theorem ViewPoly.interp_eq {Δ} (p : Poly n) (r : LayoutRef Sig Δ T) (lenv : LEnv P Δ) :
     (ViewPoly p r).interp P sigSem lenv
       =
-    p.interp1 (fun _ => ULift (r.interp P sigSem lenv).Rep) := by
+    p.interp1 P (fun _ => ULift (r.interp P sigSem lenv).Rep) := by
   induction p with
   | base b => rfl
   | var i => rfl
   | sum a b aIH bIH => simp only [ViewPoly, Ty.interp, Poly.interp1, aIH, bIH]
   | prod a b aIH bIH => simp only [ViewPoly, Ty.interp, Poly.interp1, aIH, bIH]
 
-omit [Backend P] in
 theorem View.interp_eq (r : LayoutRef Sig Δ T) (lenv : LEnv P Δ) :
-    (View T r).interp P sigSem lenv = T.layer (ULift (r.interp P sigSem lenv).Rep) := by
+    (View T r).interp P sigSem lenv = T.layer P (ULift (r.interp P sigSem lenv).Rep) := by
   cases T with
   | plain p =>
-      change (ViewPoly p r).interp P sigSem lenv = p.interp1 Fin.elim0
+      change (ViewPoly p r).interp P sigSem lenv = p.interp1 P Fin.elim0
       rw [ViewPoly.interp_eq P sigSem p r lenv]
-      exact congrArg (fun env : Fin 0 → Type 1 => p.interp1 env)
+      exact congrArg (fun env : Fin 0 → Type 1 => p.interp1 P env)
         (funext fun i => Fin.elim0 i)
   | mu p => exact ViewPoly.interp_eq P sigSem p r lenv
 
-omit [Backend P] in
 theorem Ty.interp_rename (ρ : LRen Δ Δ') (lenv' : LEnv P Δ') (a : Ty Sig Δ) :
     (a.rename ρ).interp P sigSem lenv' = a.interp P sigSem (ρ.interp P lenv') := by
   induction a generalizing Δ' with
@@ -179,12 +177,10 @@ theorem Ty.interp_rename (ρ : LRen Δ Δ') (lenv' : LEnv P Δ') (a : Ty Sig Δ)
           ((bodyIH _ _).trans
             (Ty.interp_congr P sigSem (fun l => by cases l <;> rfl) body)))
 
-omit [Backend P] in
 theorem Ty.interp_weaken {Δ : LCtx} {T : Adt} (lenv : LEnv P Δ) (L : SemLayout P T) (a : Ty Sig Δ) :
     (a.weaken (T := T)).interp P sigSem (lenv.extend P L) = a.interp P sigSem lenv := by
   rw [Ty.weaken, Ty.interp_rename]; rfl
 
-omit [Backend P] in
 theorem Ty.interp_instantiate {Δ : LCtx} {T : Adt} (lenv : LEnv P Δ)
           (body : Ty Sig (Δ.extend T)) (L : LayoutRef Sig Δ T) :
     (body.instantiate L).interp P sigSem lenv

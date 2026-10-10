@@ -35,7 +35,7 @@ def Comp.bind {A B : Type 1} (m : Comp P A) (f : A → Comp P B) : Comp P B :=
 /-! ## Expressions -/
 def Expr.interp {Δ} {Γ : Ctx Sig Δ} {a : Ty Sig Δ}  :
     Expr Γ a → (lenv : LEnv P Δ) → Env P sigSem Γ lenv → Comp P (a.interp P sigSem lenv)
-| .lit (b := b) v, lenv, env => Comp.ret P ⟨v⟩
+| .lit (b := b) v, lenv, env => Comp.ret P ⟨Backend.const v⟩
 | .var x, lenv, env => Comp.ret P (env x)
 | .lam e, lenv, env => Comp.ret P (fun x => e.interp lenv (env.extend _ _ x))
 | .app e1 e2, lenv, env =>
@@ -61,16 +61,14 @@ def Expr.interp {Δ} {Γ : Ctx Sig Δ} {a : Ty Sig Δ}  :
 | .add e1 e2, lenv, env =>
     Comp.bind P (e1.interp lenv env) fun x =>
     Comp.bind P (e2.interp lenv env) fun y =>
-    Comp.ret P ⟨(x.down : Int) + (y.down : Int)⟩
+    Comp.ret P ⟨Backend.add x.down y.down⟩
 | .eq e1 e2, lenv, env =>
     Comp.bind P (e1.interp lenv env) fun x =>
     Comp.bind P (e2.interp lenv env) fun y =>
-    Comp.ret P ⟨(x.down : Int) == (y.down : Int)⟩
+    Comp.ret P ⟨Backend.eq x.down y.down⟩
 | .ite e1 e2 e3, lenv, env =>
-    Comp.bind P (e1.interp lenv env) fun b =>
-    if (b.down : Bool) = true
-    then e2.interp lenv env
-    else e3.interp lenv env
+    Comp.bind P (e1.interp lenv env) fun b => fun κ =>
+      ⟨Backend.cond b.down (e2.interp lenv env κ).down (e3.interp lenv env κ).down⟩
 
 | .layoutLam e, lenv, env =>
     Comp.ret P (fun L => e.interp (lenv.extend P L) (Env.weaken P sigSem L env))
