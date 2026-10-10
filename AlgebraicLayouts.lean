@@ -1,1 +1,3 @@
-import AlgebraicLayouts.Basic
+import AlgebraicLayouts.Syntax
+import AlgebraicLayouts.TyInterp
+import AlgebraicLayouts.ExprInterp

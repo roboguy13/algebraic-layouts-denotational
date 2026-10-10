@@ -147,7 +147,7 @@ inductive Stable : Ty Sig Δ → Prop where
 | forallLayout : ∀ {body}, Stable body → Stable (.forallLayout T body)
 
 omit Sig in
-def Base.interp : Base → Type
+abbrev Base.interp : Base → Type
 | .bool => Bool
 | .int => Int
 | .unit => Unit

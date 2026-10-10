@@ -2,11 +2,6 @@ import AlgebraicLayouts.Syntax
 
 variable {Sig : Adt → Type}
 
-def Base.interp : Base → Type
-| .int => Int
-| .bool => Bool
-| .unit => Unit
-
 abbrev PolyEnv (n : Nat) := Fin n → Type
 
 def Poly.interp (env : PolyEnv n) (p : Poly n) : Type :=
