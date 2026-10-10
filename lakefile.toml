@@ -1,7 +1,7 @@
 name = "algebraic-layouts-denotational"
 version = "0.1.0"
 keywords = ["math"]
-defaultTargets = ["AlgebraicLayoutsDenotational"]
+defaultTargets = ["AlgebraicLayouts"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -15,4 +15,4 @@ scope = "leanprover-community"
 rev = "v4.35.0-rc4"
 
 [[lean_lib]]
-name = "AlgebraicLayoutsDenotational"
+name = "AlgebraicLayouts"
