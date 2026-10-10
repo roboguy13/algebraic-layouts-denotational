@@ -91,3 +91,5 @@ def Expr.interp {Δ} {Γ : Ctx Sig Δ} {a : Ty Sig Δ}  :
       ⟨L.dict.fresh fun dest =>
         Backend.op (L.dict.put (cast (View.interp_eq P sigSem r lenv) layer) dest)
           (κ ⟨dest⟩).down⟩
+
+| .toRef e, lenv, env => e.interp lenv env

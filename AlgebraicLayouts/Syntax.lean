@@ -141,10 +141,10 @@ def View (T : Adt) (r : LayoutRef Sig Δ T) : Ty Sig Δ :=
   | .mu p => ViewPoly p r
 
 inductive Stable : Ty Sig Δ → Prop where
-| base : ∀ {b}, Stable (.base b)
-| atL : ∀ {T l}, Stable (.atL T l)
-| arr : ∀ {a b}, Stable a → Stable b → Stable (.arr a b)
-| forallLayout : ∀ {body}, Stable body → Stable (.forallLayout T body)
+| base : ∀ {Δ : LCtx} {b}, Stable (Δ := Δ) (.base b)
+| atL : ∀ {Δ : LCtx} {T} {l : LayoutRef Sig Δ T}, Stable (.atL T l)
+| arr : ∀ {Δ} {a b : Ty Sig Δ}, Stable a → Stable b → Stable (.arr a b)
+| forallLayout : ∀ {Δ : LCtx} {T : Adt} {body : Ty Sig (Δ.extend T)}, Stable body → Stable (.forallLayout T body)
 
 omit Sig in
 abbrev Base.interp : Base → Type
@@ -176,3 +176,5 @@ inductive Expr {Sig : Adt → Type} : ∀ {Δ : LCtx}, Ctx Sig Δ → Ty Sig Δ 
 | add {Γ} (e1 : Expr Γ (.base .int)) (e2 : Expr Γ (.base .int)) : Expr Γ (.base .int)
 | eq {Γ} (e1 : Expr Γ (.base .int)) (e2 : Expr Γ (.base .int)) : Expr Γ (.base .bool)
 | ite {Γ} {a} (e1 : Expr Γ (.base .bool)) (e2 : Expr Γ a) (e3 : Expr Γ a) : Expr Γ a
+
+| toRef {Γ} {T} {r : LayoutRef Sig Δ T} (e : Expr Γ (.atL T r)) : Expr Γ (.ref T r)
