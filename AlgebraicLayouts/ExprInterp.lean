@@ -35,8 +35,8 @@ def Comp.bind {A B : Type 1} (m : Comp P A) (f : A → Comp P B) : Comp P B :=
 /-! ## Expressions -/
 def Expr.interp {Δ} {Γ : Ctx Sig Δ} {a : Ty Sig Δ}  :
     Expr Γ a → (lenv : LEnv P Δ) → Env P sigSem Γ lenv → Comp P (a.interp P sigSem lenv)
-| .lit (b := b) v, lenv, env => Comp.ret P ⟨Backend.const v⟩
-| .var x, lenv, env => Comp.ret P (env x)
+| .lit (b := b) v, _lenv, env => Comp.ret P ⟨Backend.const v⟩
+| .var x, _lenv, env => Comp.ret P (env x)
 | .lam e, lenv, env => Comp.ret P (fun x => e.interp lenv (env.extend _ _ x))
 | .app e1 e2, lenv, env =>
     Comp.bind P (e1.interp lenv env) fun f =>
@@ -87,9 +87,13 @@ def Expr.interp {Δ} {Γ : Ctx Sig Δ} {a : Ty Sig Δ}  :
 
 | .close (r := r) e, lenv, env =>
     Comp.bind P (e.interp lenv env) fun layer => fun κ =>
-      let L := r.interp P sigSem lenv
-      ⟨L.dict.fresh fun dest =>
-        Backend.op (L.dict.put (cast (View.interp_eq P sigSem r lenv) layer) dest)
-          (κ ⟨dest⟩).down⟩
+      ⟨(r.interp P sigSem lenv).dict.close_ (cast (View.interp_eq P sigSem r lenv) layer)
+        (fun dest => (κ ⟨dest⟩).down)⟩
+
+    -- Comp.bind P (e.interp lenv env) fun layer => fun κ =>
+    --   let L := r.interp P sigSem lenv
+    --   ⟨L.dict.fresh fun dest =>
+    --     Backend.op (L.dict.put (cast (View.interp_eq P sigSem r lenv) layer) dest)
+    --       (κ ⟨dest⟩).down⟩
 
 | .toRef e, lenv, env => e.interp lenv env

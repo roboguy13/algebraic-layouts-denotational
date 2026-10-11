@@ -49,9 +49,8 @@ def ex : intList.interp :=
   .inr (.pair (.base (7 : Int)) (.roll (.inr (.pair (.base (9 : Int)) (.roll (.inl (.base ())))))))
 
 structure Dict (T : Adt) (A : Type) : Type 1 where
-  put   : T.layer P (ULift A) → A → P          -- build one layer at a destination
-  open_ : (T.layer P (ULift A) → P) → A → P    -- case-split one layer
-  fresh : (A → P) → P                -- allocate a destination
+  close_ : T.layer P (ULift A) → (A → P) → P   -- build one layer, pass its handle on
+  open_  : (T.layer P (ULift A) → P) → A → P   -- case-split one layer
 
 structure SemLayout (T : Adt) : Type 1 where
   Rep  : Type
