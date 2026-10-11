@@ -84,3 +84,32 @@ theorem AVal.toLayer_ofLayer {body : Poly 1} :
   | .prod a b, (x, y) => by
       show (AVal.toLayer P a (AVal.ofLayer P a x), AVal.toLayer P b (AVal.ofLayer P b y)) = _
       rw [AVal.toLayer_ofLayer a x, AVal.toLayer_ofLayer b y]
+
+theorem AVal.toLayer0_ofLayer0 :
+    (p : Poly 0) → (u : p.interp1 P Fin.elim0) →
+      Poly.toLayer0 P p (Poly.ofLayer0 P p u) = u
+  | .base _, _ => rfl
+  | .var _, _ => by
+      apply Fin.elim0
+      trivial
+  | .sum a _, .inl x => by
+      simp [Poly.ofLayer0, Poly.toLayer0]
+      rw [AVal.toLayer0_ofLayer0]
+  | .sum _ b, .inr y => by
+      simp [Poly.ofLayer0, Poly.toLayer0]
+      rw [AVal.toLayer0_ofLayer0]
+  | .prod a b, (x, y) => by
+      simp [Poly.ofLayer0, Poly.toLayer0]
+      rw [AVal.toLayer0_ofLayer0]
+      rw [AVal.toLayer0_ofLayer0]
+
+theorem absLayout_beta (T : Adt) (u : T.layer P (ULift (Abs P T).Rep)) (k : _ → P) :
+    (Abs P T).dict.close_ u ((Abs P T).dict.open_ k) = k u := by
+  induction T with
+  | plain p =>
+      simp [Abs]
+      rw [AVal.toLayer0_ofLayer0 P p u]
+
+  | mu body =>
+      simp [Abs]
+      rw [AVal.toLayer_ofLayer P body u]
