@@ -4,9 +4,16 @@
   Lean 4.35.0-rc4, with ONE fix to Syntax.lean (`Stable` needs explicit
   binders; see below). Output:
 
-    nilProg:  ∃x0. x0 = null * result = x0
-    openProg: ∃x0. x0 = null * (x0 = null * result = 1)
-                 ∨ (∃x1. ∃x2. x0 ↦ x1 * (x0+1) ↦ x2 * result = 2)
+    nilProg:  (∃x0. (⌜x0 = null⌝ * ⌜result = x0⌝))
+    openProg: (∃x0. (⌜x0 = null⌝ * ((⌜x0 = null⌝ * ⌜result = 1⌝)
+                ∨ (∃x1. (∃x2. ((⌜x0 ≠ null⌝ * (⌜mem(x0) = x1⌝ * ⌜mem(x0+1) = x2⌝))
+                              * ⌜result = 2⌝))))))
+    openCons (needs `toRef`; build Cons 7 Nil, open, return head):
+              (∃x0. (⌜x0 = null⌝ * (∃x1. ((x1 ↦ 7 * (x1+1) ↦ x0) *
+                ((⌜x1 = null⌝ * ⌜result = 1⌝)
+                 ∨ (∃x2. (∃x3. ((⌜x1 ≠ null⌝ * (⌜mem(x1) = x2⌝ * ⌜mem(x1+1) = x3⌝))
+                               * ⌜result = x2⌝))))))))
+              which is equivalent to result = 7.
 
   Required fix in Syntax.lean. The current constructors mention no term that
   fixes the layout context, so auto-bound implicits turn it into a function
@@ -20,7 +27,9 @@
     | forallLayout {Δ : LCtx} {T : Adt} {body : Ty Sig (Δ.extend T)} :
         Stable body → Stable (.forallLayout T body)
 
-  Note: this `sll.open_` emits heaplets on open (design-decisions entry 14).
+  `sll.open_` uses pure reads of global memory (design-decisions entry 14,
+  option A), with an explicit `≠ null` guard in the Cons branch: reads alone
+  don't exclude null, unlike the earlier heaplets-on-open version.
 -/
 
 import AlgebraicLayouts.ExprInterp
@@ -35,15 +44,21 @@ inductive Asn where
   | sep (a b : Asn)
   | or (a b : Asn)
   | ex (body : String → Asn)
+  /-- Pure read of the global immutable memory (design-decisions entry 14). -/
+  | read (loc : String) (off : Nat) (val : String)
 
+/-- Fully parenthesized rendering: pure facts in ⌜ ⌝, every compound bracketed.
+(An earlier version printed `a * b ∨ c` ambiguously.) -/
 def Asn.render : Nat → Asn → String
   | _, .emp => "emp"
-  | _, .pure s => s
+  | _, .pure s => s!"⌜{s}⌝"
   | _, .pt l 0 v => s!"{l} ↦ {v}"
   | _, .pt l o v => s!"({l}+{o}) ↦ {v}"
-  | n, .sep a b => s!"{a.render n} * {b.render n}"
-  | n, .or a b => s!"({a.render n}) ∨ ({b.render n})"
-  | n, .ex body => s!"∃x{n}. " ++ (body s!"x{n}").render (n + 1)
+  | n, .sep a b => s!"({a.render n} * {b.render n})"
+  | n, .or a b => s!"({a.render n} ∨ {b.render n})"
+  | _, .read l 0 v => s!"⌜mem({l}) = {v}⌝"
+  | _, .read l o v => s!"⌜mem({l}+{o}) = {v}⌝"
+  | n, .ex body => s!"(∃x{n}. " ++ (body s!"x{n}").render (n + 1) ++ ")"
 
 def renderBase : (b : Base) → b.interp → String
   | .int, v => toString v
@@ -69,7 +84,9 @@ def sll : SemLayout Asn intList where
       open_ := fun k dest =>
         .or (.sep (.pure s!"{dest} = null") (k (.inl ⟨"()"⟩)))
             (.ex fun h => .ex fun t =>
-              .sep (.sep (.pt dest 0 h) (.pt dest 1 t)) (k (.inr (⟨h⟩, ⟨t⟩))))
+              -- reads, not ownership; the Cons guard must be explicit
+              .sep (.sep (.pure s!"{dest} ≠ null") (.sep (.read dest 0 h) (.read dest 1 t)))
+                (k (.inr (⟨h⟩, ⟨t⟩))))
       fresh := fun f => .ex f }
 
 inductive Names : Adt → Type where
